@@ -1,0 +1,26 @@
+{
+  "name": "rochasaurus-rex",
+  "version": "1.0.0",
+  "description": "Rochasaurus Rex: quip it, vote it, roar about it. A head-to-head funny-answers party game for 3-10 friends.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/e2e.js",
+    "test:browser": "node test/browser.js",
+    "test:audio": "node test/audio-unlock.js",
+    "test:audio-pages": "node test/audio-pages.js",
+    "test:all": "node test/e2e.js && node test/browser.js && node test/audio-unlock.js && node test/audio-pages.js"
+  },
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.3.0",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.43.1",
+    "socket.io-client": "^4.8.4"
+  },
+  "engines": { "node": ">=20" },
+  "private": true
+}

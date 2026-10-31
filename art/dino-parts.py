@@ -1,0 +1,86 @@
+DEFS = '''
+    <radialGradient id="dg-skin" cx="38%" cy="30%" r="75%"><stop offset="0" stop-color="#a6f08f"/><stop offset=".55" stop-color="#5cca5e"/><stop offset="1" stop-color="#2e8f45"/></radialGradient>
+    <radialGradient id="dg-body" cx="40%" cy="25%" r="80%"><stop offset="0" stop-color="#8fe27c"/><stop offset=".6" stop-color="#4fbb57"/><stop offset="1" stop-color="#2a8440"/></radialGradient>
+    <radialGradient id="dg-belly" cx="40%" cy="30%" r="75%"><stop offset="0" stop-color="#fffbe6"/><stop offset=".7" stop-color="#fff0c2"/><stop offset="1" stop-color="#f2d58a"/></radialGradient>
+    <linearGradient id="dg-spike" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd85a"/><stop offset="1" stop-color="#f28a22"/></linearGradient>
+    <radialGradient id="dg-mic" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#cfd5e4"/><stop offset="1" stop-color="#8a93ad"/></radialGradient>
+    <linearGradient id="dg-crown" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2a0"/><stop offset=".5" stop-color="#ffcf3a"/><stop offset="1" stop-color="#e59a12"/></linearGradient>
+    <linearGradient id="dg-ribbon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8a7c"/><stop offset="1" stop-color="#e0473a"/></linearGradient>
+'''
+FIGURE = '''
+    <ellipse cx="110" cy="210" rx="60" ry="8" fill="#000" opacity=".22"/>
+    <!-- tail -->
+    <path d="M146 168 Q190 172 206 142 Q210 132 201 135 Q190 158 150 148 Z" fill="url(#dg-body)"/>
+    <path d="M178 160 l6 -12 l5 10 Z M194 148 l7 -10 l3 11 Z" fill="url(#dg-spike)" stroke="#f28a22" stroke-width="2" stroke-linejoin="round"/>
+    <!-- back spikes peeking over the head -->
+    <g fill="url(#dg-spike)" stroke="#ef8a24" stroke-width="3" stroke-linejoin="round">
+      <path d="M58 62 L54 36 L80 44 Z"/>
+      <path d="M80 40 L84 14 L104 32 Z"/>
+      <path d="M106 32 L122 10 L132 34 Z"/>
+      <path d="M132 36 L156 22 L154 48 Z"/>
+      <path d="M154 50 L178 46 L166 68 Z"/>
+    </g>
+    <!-- feet -->
+    <ellipse cx="86" cy="199" rx="20" ry="11" fill="url(#dg-body)"/>
+    <ellipse cx="134" cy="199" rx="20" ry="11" fill="url(#dg-body)"/>
+    <g fill="#fff4cf"><circle cx="76" cy="203" r="3.4"/><circle cx="86" cy="205" r="3.4"/><circle cx="96" cy="203" r="3.4"/><circle cx="124" cy="203" r="3.4"/><circle cx="134" cy="205" r="3.4"/><circle cx="144" cy="203" r="3.4"/></g>
+    <!-- body + belly -->
+    <ellipse cx="110" cy="160" rx="47" ry="44" fill="url(#dg-body)"/>
+    <ellipse cx="110" cy="168" rx="30" ry="30" fill="url(#dg-belly)"/>
+    <path d="M90 158 Q110 164 130 158 M88 172 Q110 178 132 172 M92 186 Q110 191 128 186" fill="none" stroke="#e2bf6c" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- waving arm -->
+    <g transform="rotate(-38 70 146)"><rect x="50" y="138" width="30" height="16" rx="8" fill="url(#dg-body)"/><circle cx="52" cy="146" r="8.5" fill="url(#dg-skin)"/></g>
+    <!-- head -->
+    <ellipse cx="108" cy="88" rx="66" ry="56" fill="url(#dg-skin)"/>
+    <g fill="#c9f7b4" opacity=".55"><circle cx="146" cy="58" r="7"/><circle cx="160" cy="74" r="4.5"/><circle cx="134" cy="46" r="4"/></g>
+    <!-- face -->
+    <ellipse cx="84" cy="88" rx="11.5" ry="13.5" fill="#1d2233"/>
+    <ellipse cx="132" cy="88" rx="11.5" ry="13.5" fill="#1d2233"/>
+    <circle cx="88.5" cy="82" r="4.8" fill="#fff"/><circle cx="80.5" cy="94" r="2.2" fill="#fff"/>
+    <circle cx="136.5" cy="82" r="4.8" fill="#fff"/><circle cx="128.5" cy="94" r="2.2" fill="#fff"/>
+    <ellipse cx="66" cy="108" rx="11" ry="6.5" fill="#ff8fa0" opacity=".7"/>
+    <ellipse cx="150" cy="108" rx="11" ry="6.5" fill="#ff8fa0" opacity=".7"/>
+    <ellipse cx="102" cy="101" rx="2.2" ry="1.6" fill="#226b35"/><ellipse cx="114" cy="101" rx="2.2" ry="1.6" fill="#226b35"/>
+    <path d="M94 109 Q108 130 122 109 Q108 114 94 109 Z" fill="#b8324a" stroke="#1d2233" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M100 118 Q108 125 116 118 Q108 114 100 118 Z" fill="#ff8a9b"/>
+    <path d="M97 110 l3 5 l3 -4.4 Z M119 110 l-3 5 l-3 -4.4 Z" fill="#fff"/>
+    <!-- arm + microphone (in front) -->
+    <g transform="rotate(-12 172 150)">
+      <rect x="167" y="128" width="10" height="40" rx="5" fill="#2b2f45"/>
+      <rect x="167" y="134" width="10" height="5" rx="2" fill="#ff6b5b"/>
+      <circle cx="172" cy="122" r="13" fill="url(#dg-mic)" stroke="#2b2f45" stroke-width="3"/>
+      <path d="M162 118 h20 M161 125 h22 M166 112 v20 M172 110 v24 M178 112 v20" stroke="#8a93ad" stroke-width="1.4" opacity=".7"/>
+      <circle cx="167" cy="117" r="3.2" fill="#fff" opacity=".9"/>
+    </g>
+    <g transform="rotate(-20 150 150)"><rect x="140" y="142" width="30" height="16" rx="8" fill="url(#dg-body)"/><circle cx="168" cy="150" r="8.5" fill="url(#dg-skin)"/></g>
+    <!-- glossy vinyl-toy highlights -->
+    <ellipse cx="78" cy="54" rx="17" ry="8" transform="rotate(-26 78 54)" fill="#fff" opacity=".45"/>
+    <ellipse cx="88" cy="140" rx="8" ry="4" transform="rotate(-20 88 140)" fill="#fff" opacity=".3"/>
+'''
+CROWN = '''
+    <path d="M10 44 L4 10 L26 28 L40 4 L54 28 L76 10 L70 44 Z" fill="url(#dg-crown)" stroke="#b86e07" stroke-width="3.5" stroke-linejoin="round"/>
+    <rect x="10" y="40" width="60" height="10" rx="4" fill="url(#dg-crown)" stroke="#b86e07" stroke-width="3.5"/>
+    <circle cx="40" cy="30" r="5" fill="#ff6b5b" stroke="#b86e07" stroke-width="2"/><circle cx="22" cy="34" r="3.5" fill="#4cc9f0"/><circle cx="58" cy="34" r="3.5" fill="#5ad1a7"/>
+    <circle cx="4" cy="10" r="3.5" fill="#fff2a0"/><circle cx="40" cy="4" r="3.5" fill="#fff2a0"/><circle cx="76" cy="10" r="3.5" fill="#fff2a0"/>
+'''
+BANNER = '''
+    <path d="M14 10 L36 8 L36 34 L14 32 L22 21 Z" fill="#d9493b"/>
+    <path d="M206 10 L184 8 L184 34 L206 32 L198 21 Z" fill="#d9493b"/>
+    <rect x="30" y="4" width="160" height="28" rx="9" fill="url(#dg-ribbon)"/>
+    <rect x="38" y="7" width="80" height="5" rx="2.5" fill="#fff" opacity=".35"/>
+    <text x="110" y="24.5" text-anchor="middle" font-family="Fredoka, Nunito, sans-serif" font-weight="700" font-size="14.5" fill="#fff8e8">RAWR means I love you ♥</text>
+'''
+import sys
+mode = sys.argv[1]
+if mode == 'standalone':
+    print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="440" height="440"><title>Rex, the Rochasaurus Rex mascot</title><defs>{DEFS}</defs>{FIGURE}</svg>')
+elif mode == 'favicon':
+    # just the head, cropped
+    print(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="36 4 148 150"><defs>{DEFS}</defs>{FIGURE}</svg>')
+elif mode == 'sprite':
+    print(f'''<svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>{DEFS}  </defs>
+  <symbol id="dino" viewBox="0 0 220 220">{FIGURE}  </symbol>
+  <symbol id="crown" viewBox="0 0 80 54">{CROWN}  </symbol>
+  <symbol id="dino-banner" viewBox="0 0 220 40">{BANNER}  </symbol>
+</svg>''')
