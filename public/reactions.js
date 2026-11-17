@@ -21,7 +21,7 @@
 })(typeof window !== 'undefined' ? window : null, function () {
   return [
     { id: 'plop', emoji: '💩', label: 'Plop', file: 'sounds/plop.mp3' },
-    { id: 'toot', emoji: '🍑', label: 'Squeak', file: 'sounds/toot.mp3' },
+    { id: 'toot', emoji: '🍑', label: 'Juicy fart', file: 'sounds/toot.mp3', duck: [0.55, 1.6] },
     { id: 'hoo', emoji: '🗣️', label: 'Hype shout', file: 'sounds/hoo.mp3', duck: [0.5, 1.5] },
     { id: 'boo', emoji: '👎', label: 'Boo', file: 'sounds/boo.mp3', duck: [0.55, 1.4] },
     { id: 'yay', emoji: '👍', label: 'Cheer', file: 'sounds/yay.mp3', duck: [0.55, 1.2] },

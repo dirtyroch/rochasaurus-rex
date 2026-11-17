@@ -63,11 +63,11 @@ A synthesized sound:
   - `fx.voice({ f0, f0to, dur, vol, delay, f1, f1to, f2, f2to, vibrato, breath })` — a cartoon shout. `f0` is the pitch in Hz. `f1` and `f2` are vowel formants (`f2` near 800 is “oo”, near 2000 is “ee” / “ay”).
   - `fx.roar(size)` — Rex’s roar. `fx.duck(amount, hold)` — dip the music under a loud reaction.
 
-Use a recording that is CC0 or public domain. Trim it to 2 seconds or less (a shout, boo, or cheer can run to about 2.5 seconds), match its loudness to the other clips, and encode a small mono MP3 (128 kbps CBR decodes in Safari as well as Chrome and Firefox). Keep the file under 60KB. Add a row to `public/sounds/README.md` with the source URL and the license.
+Use a recording that is CC0 or public domain. Trim it to 2 seconds or less (a shout, boo, or cheer can run to about 2.5 seconds, and the peach fart runs to about 3), match its loudness to the other clips, and encode a small mono MP3 (128 kbps CBR decodes in Safari as well as Chrome and Firefox). Keep the file under 60KB. Add a row to `public/sounds/README.md` with the source URL and the license.
 
 The new button shows up on the bar by itself. The first tap in the room unlocks audio on phones (including mobile Safari); the same unlock the music already uses. Buffers preload on that unlock.
 
-The recorded set is a toilet plop (💩), a squeaky fart (🍑), a whooping hype shout (🗣️), a crowd “boo” (👎), a group “yay” (👍), a laugh (😂), a fire whoosh (🔥), a bone crack (💀), clapping (👏), and a crowd gasp (😱). Rex (🦖) still uses the synthesized roar.
+The recorded set is a toilet plop (💩), a long wet fart with a squeaky tail (🍑), a whooping hype shout (🗣️), a crowd “boo” (👎), a group “yay” (👍), a laugh (😂), a fire whoosh (🔥), a bone crack (💀), clapping (👏), and a crowd gasp (😱). Rex (🦖) still uses the synthesized roar.
 
 ## Tests
 
