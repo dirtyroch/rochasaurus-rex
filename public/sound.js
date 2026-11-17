@@ -1,5 +1,6 @@
-// Rochasaurus Rex audio engine. Everything here is synthesized live with the Web Audio API:
-// original music loops (step sequencer + lookahead scheduler) and sound effects. No audio files.
+// Rochasaurus Rex audio engine. Music and game sound effects are synthesized live with the Web Audio API
+// (step sequencer + lookahead scheduler). Reaction clips live in public/sounds/ and are decoded into
+// Web Audio buffers after the unlock gesture, so a tap plays immediately on phones.
 window.Sfx = (() => {
   'use strict';
   // ---------- settings (persisted) ----------
@@ -34,7 +35,7 @@ window.Sfx = (() => {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
     try { ctx = new AC({ latencyHint: 'interactive' }); } catch { try { ctx = new AC(); } catch { ctx = null; return null; } }
     // when the context (re)starts, make sure the wanted track is actually playing and the UI knows
-    ctx.onstatechange = () => { if (ctx.state === 'running') syncTrack(); emit(); };
+    ctx.onstatechange = () => { if (ctx.state === 'running') { syncTrack(); preloadReactionSamples(); emit(); } };
     master = ctx.createDynamicsCompressor();
     master.threshold.value = -14; master.knee.value = 10; master.ratio.value = 4; master.attack.value = 0.004; master.release.value = 0.2;
     master.connect(ctx.destination);
@@ -344,6 +345,67 @@ window.Sfx = (() => {
     const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000; f.connect(g); noise(t + 0.16, 1.4, f);
   }
 
+  // Recorded reactions. Decode after the audio context is running (the unlock gesture) and keep the
+  // buffers, so later taps don't wait on the network. A tap that lands before its buffer is ready
+  // still plays: it decodes that one file and starts it.
+  const sampleBuffers = new Map();
+  let samplesRequested = false;
+  function sampleUrl(file) { return '/' + String(file || '').replace(/^\/+/, ''); }
+  function decodeAudio(raw) {
+    const copy = raw.slice(0); // Safari detaches the buffer it decodes
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const ok = (buf) => { if (!settled) { settled = true; resolve(buf); } };
+      const bad = (err) => { if (!settled) { settled = true; reject(err || new Error('decode')); } };
+      try {
+        const p = ctx.decodeAudioData(copy, ok, bad);
+        if (p && typeof p.then === 'function') p.then(ok, bad);
+      } catch (err) { bad(err); }
+    });
+  }
+  function loadSample(file) {
+    const url = sampleUrl(file);
+    const hit = sampleBuffers.get(url);
+    if (hit instanceof AudioBuffer) return Promise.resolve(hit);
+    if (hit && typeof hit.then === 'function') return hit;
+    const p = fetch(url).then((res) => {
+      if (!res.ok) throw new Error(String(res.status));
+      return res.arrayBuffer();
+    }).then(decodeAudio).then((buf) => {
+      sampleBuffers.set(url, buf);
+      return buf;
+    }).catch((err) => {
+      sampleBuffers.delete(url);
+      throw err;
+    });
+    sampleBuffers.set(url, p);
+    return p;
+  }
+  function preloadReactionSamples() {
+    if (!ctx || ctx.state !== 'running' || samplesRequested) return;
+    samplesRequested = true;
+    const list = (typeof window !== 'undefined' && window.REACTIONS) || [];
+    list.forEach((r) => { if (r && r.file) loadSample(r.file).catch(() => {}); });
+  }
+  function playSample(file, gain) {
+    const start = (buf) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.value = typeof gain === 'number' ? gain : 1;
+      src.connect(g); g.connect(sfxBus);
+      src.start();
+      drop(src, g);
+    };
+    const url = sampleUrl(file);
+    const hit = sampleBuffers.get(url);
+    if (hit instanceof AudioBuffer) { start(hit); return; }
+    loadSample(file).then((buf) => {
+      if (settings.reactions === false || !settings.sfx || !ctx) return;
+      start(buf);
+    }).catch(() => {});
+  }
+
   // Toolbox handed to each entry in public/reactions.js. Sources stop themselves and drop their nodes.
   function drop(source, ...nodes) {
     try { source.onended = () => { for (const n of [source, ...nodes]) { try { n.disconnect(); } catch { /* ignore */ } } }; } catch { /* ignore */ }
@@ -430,10 +492,15 @@ window.Sfx = (() => {
     playReaction(id) {
       if (settings.reactions === false) return;
       if (!sfxReady()) return;
+      preloadReactionSamples();
       const list = (typeof window !== 'undefined' && window.REACTIONS) || [];
       const r = list.find(x => x.id === id);
-      if (!r || typeof r.play !== 'function') return;
-      try { r.play(reactionFx); } catch { /* a bad sound never breaks the game */ }
+      if (!r || (!r.file && typeof r.play !== 'function')) return;
+      try {
+        if (Array.isArray(r.duck) && r.duck.length) reactionFx.duck(r.duck[0], r.duck[1]);
+        if (r.file) playSample(r.file, r.gain);
+        if (typeof r.play === 'function') r.play(reactionFx);
+      } catch { /* a bad sound never breaks the game */ }
     },
     setMusicVol(v) { settings.musicVol = Math.min(1, Math.max(0, +v)); if (settings.musicVol > 0 && !settings.music) settings.music = true; save(); applyMusicVol(0.15); emit(); },
     setSfxVol(v) { settings.sfxVol = Math.min(1, Math.max(0, +v)); if (settings.sfxVol > 0 && !settings.sfx) settings.sfx = true; save(); applySfxVol(); emit(); },
@@ -550,7 +617,7 @@ window.Sfx = (() => {
   function onGesture() {
     setSession();
     ac(); prime(); keepSilentTrack();
-    if (ctx && ctx.state === 'running') { syncTrack(); }
+    if (ctx && ctx.state === 'running') { syncTrack(); preloadReactionSamples(); }
   }
   ['pointerdown', 'pointerup', 'touchend', 'mousedown', 'click', 'keydown'].forEach(ev => window.addEventListener(ev, onGesture, { capture: true, passive: true }));
   setSession();
