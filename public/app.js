@@ -8,7 +8,7 @@
   const COLORS = ['#ff6b5b','#ffb238','#ffe066','#5ad1a7','#4cc9f0','#7b8cff','#c77dff','#ff7eb6','#9bdb4d','#f4a261'];
   const PACK_META = { family: { icon: '🦕', desc: '240 clean, silly prompts for all ages.' }, spicy: { icon: '🌶️', desc: 'Adds 60 sassier roast-y prompts. Still clean!' } };
   const PACES = [['chill', '🐢 Chill'], ['normal', '🦖 Normal'], ['hasty', '⚡ Hasty']];
-  const REACTS = ['😂','🔥','💀','👏','😱','🦖'];
+  const REACTIONS = window.REACTIONS || [];
   const ROUND_INFO = {
     1: { title: 'Round 1', sub: 'Two prompts each. Make \'em laugh!' },
     2: { title: 'Round 2', sub: 'Double points! Bring the heat.' },
@@ -155,7 +155,8 @@
   socket.on('kicked', ({ reason }) => { toast(reason, 4200); leaveToHome(); });
   function leaveToHome() {
     sessionStorage.removeItem('rrx-room'); S.st = null; S.prev = null; S.viewKey = null;
-    document.body.classList.remove('is-host'); $('#room-chip').classList.add('hidden');
+    document.body.classList.remove('is-host', 'has-react'); $('#room-chip').classList.add('hidden');
+    $('#react-bar').classList.add('hidden');
     history.replaceState(null, '', TV ? '/tv' : '/'); stopTimer();
     if (!TV) $('#create-btn').classList.remove('hidden');
     show('screen-home'); Sfx.music('lobby'); Sfx.tension(false);
@@ -171,6 +172,9 @@
     const st = S.st, prev = S.prev;
     document.body.classList.toggle('is-host', isHost());
     document.body.classList.toggle('is-audience', st.role === 'audience');
+    const showReact = !TV && st.role !== 'tv';
+    document.body.classList.toggle('has-react', showReact);
+    $('#react-bar').classList.toggle('hidden', !showReact);
     $('#room-chip').textContent = st.code; $('#room-chip').classList.remove('hidden');
     const phaseKey = st.phase + ':' + (st.game?.phaseId || '');
     const changed = !prev || (prev.phase + ':' + (prev.game?.phaseId || '')) !== phaseKey;
@@ -235,8 +239,10 @@
       ? (n < st.minPlayers ? `Need ${st.minPlayers - n} more player${st.minPlayers - n > 1 ? 's' : ''} to start. Send them the link!` : `${n} players ready. Let's roar!`)
       : (TV ? `Waiting for ${pname(st.hostId)} to start…` : `Waiting for ${pname(st.hostId)} to start…`);
     $('.custom-box').classList.toggle('hidden', TV || st.role === 'tv');
-    $('#my-custom').innerHTML = (st.myCustom || []).map((t, i) => `<li><span>${esc(t)}</span><button data-rm="${i}" aria-label="Remove prompt">✕</button></li>`).join('');
-    $('#custom-note').textContent = st.customCount ? `${st.customCount} custom prompt${st.customCount > 1 ? 's' : ''} in the hat. They get mixed into rounds 1 and 2.` : 'Inside jokes welcome. Use a player\'s name and it gets extra funny.';
+    $('#custom-note').textContent = st.customCount
+      ? `${st.customCount} prompt${st.customCount > 1 ? 's' : ''} saved for an upcoming round.`
+      : 'Optional. Mixed into an upcoming round, and you will not have to answer your own if we can avoid it.';
+    paintLater();
     if (navigator.share && !TV) $('#share-link').classList.remove('hidden');
     if (!renderLobby.bubbleSet) { renderLobby.bubbleSet = true; $('#lobby-bubble').textContent = BUBBLES[Math.floor(Math.random() * BUBBLES.length)]; }
   }
@@ -244,11 +250,19 @@
   $('#pack-list').addEventListener('click', e => { const b = e.target.closest('[data-pack]'); if (b && isHost()) { socket.emit('settings', { pack: b.dataset.pack }); Sfx.pop(); } });
   $('#pace-list').addEventListener('click', e => { const b = e.target.closest('[data-pace]'); if (b && isHost()) { socket.emit('settings', { pace: b.dataset.pace }); Sfx.pop(); } });
   $('#filter-toggle').addEventListener('change', e => { socket.emit('settings', { filter: e.target.checked }); Sfx.pop(); });
-  $('#custom-form').addEventListener('submit', e => {
-    e.preventDefault(); const inp = $('#custom-input'); const t = inp.value.trim(); if (!t) return;
-    socket.emit('custom', t, (res) => { if (res.error) toast(res.error); else { inp.value = ''; Sfx.send(); toast('Prompt added to the hat 🎩'); } });
+  document.addEventListener('submit', (e) => {
+    const form = e.target.closest('form[data-later]'); if (!form) return;
+    e.preventDefault();
+    const inp = form.querySelector('.later-input'); const t = (inp && inp.value || '').trim(); if (!t) return;
+    socket.emit('custom', t, (res) => {
+      if (res.error) toast(res.error);
+      else { inp.value = ''; Sfx.send(); toast('Saved for a later round ✍️'); }
+    });
   });
-  $('#my-custom').addEventListener('click', e => { const b = e.target.closest('[data-rm]'); if (b) socket.emit('custom:remove', Number(b.dataset.rm)); });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-later-rm]'); if (!b) return;
+    socket.emit('custom:remove', Number(b.dataset.laterRm));
+  });
   const inviteLink = () => `${location.origin}/r/${S.st.code}`;
   $('#copy-link').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(inviteLink()); toast('Invite link copied! 📋'); } catch { prompt('Copy this link:', inviteLink()); }
@@ -268,9 +282,35 @@
     const st = S.st, g = st.game; if (!g) return;
     $('#round-pill').textContent = g.round === g.totalRounds ? '🌋 Last Roar' : `Round ${g.round} / ${g.totalRounds}`;
     renderMiniRoster();
-    const reactOn = ['result', 'fresult', 'scores', 'end'].includes(st.phase) && !TV;
-    $('#react-bar').classList.toggle('hidden', !reactOn);
     ({ intro: viewIntro, answer: viewAnswer, vote: viewVote, result: viewVote, scores: viewScores, fvote: viewFinal, fresult: viewFinal, end: viewEnd }[st.phase] || (() => {}))();
+    paintLater();
+  }
+  function laterMarkup(show = true) {
+    if (TV || S.st?.role === 'tv') return '';
+    return `
+      <form class="later-box${show ? '' : ' hidden'}" data-later>
+        <div class="later-head">✍️ Write a prompt for later <small class="muted">optional</small></div>
+        <div class="join-row">
+          <input class="input later-input" maxlength="100" placeholder="For an upcoming round…" autocomplete="off" enterkeyhint="done">
+          <button class="btn btn-mint btn-small" type="submit">Add</button>
+        </div>
+        <ul class="later-mine"></ul>
+        <p class="muted small later-hint"></p>
+      </form>`;
+  }
+  function paintLater() {
+    const mine = S.st?.myCustom || [];
+    const hint = mine.length
+      ? `${mine.length} of 3 saved for an upcoming round. You will not have to answer your own if we can avoid it.`
+      : 'Saved for an upcoming round. You will not have to answer your own if we can avoid it.';
+    document.querySelectorAll('.later-mine').forEach(ul => {
+      ul.innerHTML = mine.map((t, i) => `<li><span>${esc(t)}</span><button type="button" data-later-rm="${i}" aria-label="Remove prompt">✕</button></li>`).join('');
+    });
+    document.querySelectorAll('.later-hint').forEach(p => { p.textContent = hint; });
+  }
+  function showLater(show) {
+    const box = view.querySelector('[data-later]');
+    if (box) box.classList.toggle('hidden', !show);
   }
   function renderMiniRoster() {
     const st = S.st, g = st.game;
@@ -290,6 +330,7 @@
         <p class="intro-sub">${esc(ri.sub)}</p>
         ${st.game.round < 3 ? `<p class="intro-note">Points per matchup: <b>${st.game.round * 1000}</b> · Clean sweep bonus: <b>EXTINCTION!</b></p>` : '<p class="intro-note">Each vote is worth <b>400</b> points, and the crowd favorite gets <b>+500</b>.</p>'}
         <button class="btn btn-ghost btn-small host-only skip-btn" data-next>Skip ▶</button>
+        ${laterMarkup()}
       </div>`);
   }
 
@@ -302,7 +343,7 @@
       const idx = a.mine.findIndex(x => x.id === p.id);
       const built = ensure('answer:' + p.id, () => `
         <div class="card answer-card">
-          <div class="answer-meta"><span class="tag">${a.final ? '🌋 Everyone answers this one' : `Prompt ${idx + 1} of ${a.mine.length}`}</span><span class="muted small">${a.final ? '' : 'Someone else got this prompt too. Be funnier!'}</span></div>
+          <div class="answer-meta"><span class="tag">${a.final ? '🌋 Everyone answers this one' : `Prompt ${idx + 1} of ${a.mine.length}`}</span>${p.by ? `<span class="tag tag-custom">✍️ prompt by ${esc(p.by)}</span>` : ''}<span class="muted small">${a.final ? '' : 'Someone else got this prompt too. Be funnier!'}</span></div>
           <h2 class="prompt-text">${esc(p.text)}</h2>
           <form id="answer-form">
             <textarea id="answer-input" class="input input-lg" maxlength="80" rows="2" placeholder="Your funniest answer…" autocomplete="off" enterkeyhint="send"></textarea>
@@ -332,7 +373,8 @@
         <ul id="wait-list" class="wait-list"></ul>
         ${isPlayer ? '<div id="my-answers" class="my-answers"></div>' : ''}
         ${TV ? `<p class="tv-join">Join at <b>${esc(location.host)}</b> · code <b>${esc(st.code)}</b></p>` : ''}
-      </div>`);
+      </div>
+      ${laterMarkup()}`);
     const waiting = a.waiting.map(pname);
     $('#wait-text').textContent = !waiting.length ? 'Everyone\'s done! Here come the matchups…' : waiting.length <= 2 ? `Waiting on ${waiting.join(' & ')}…` : `Waiting on ${waiting.length} players…`;
     $('#wait-list').innerHTML = [...a.done, ...a.waiting].map(id => `<li class="${a.done.includes(id) ? 'done' : 'pending'}" title="${esc(pname(id))}">${avatarOf(id)}<small>${esc(pname(id))}</small></li>`).join('');
@@ -375,6 +417,7 @@
         </div>
         <p class="vote-status" id="vote-status"></p>
         ${reveal ? '<div id="result-banner" class="result-banner"></div><div class="center"><button class="btn btn-ghost btn-small host-only" data-next>Next ▶</button></div>' : ''}
+        ${laterMarkup(reveal || m.inIt || !!m.myVote)}
       </div>`);
     if (built && !reveal && canVote) $$('.answer-opt', view).forEach(b => b.addEventListener('click', () => vote(b.dataset.key)));
     // dynamic parts
@@ -389,6 +432,7 @@
       else if (r.sweep) ban.innerHTML = `<span class="sweep">☄️ EXTINCTION! ${esc(pname(r.sweep))} took every vote!</span>`;
       else ban.innerHTML = '';
     }
+    showLater(reveal || m.inIt || !!m.myVote);
   }
   function answerCard(a, i, m, reveal) {
     const r = m.result;
@@ -420,6 +464,7 @@
         <h2 class="center">🏆 Scoreboard <small class="muted">after round ${st.game.round}</small></h2>
         <ol class="scoreboard" id="scoreboard"></ol>
         <div class="center"><button class="btn btn-primary host-only" data-next>${st.game.round + 1 >= st.game.totalRounds ? 'On to the Last Roar ▶' : 'Next round ▶'}</button></div>
+        ${laterMarkup()}
       </div>`);
     if (built) renderScoreboard($('#scoreboard'), st.scores, true);
   }
@@ -451,7 +496,7 @@
       if (reveal) list = [...list].sort((a, b) => (f.result.votes[b.key] || 0) - (f.result.votes[a.key] || 0));
       return `
       <div class="final">
-        <div class="match-top"><span class="tag">🌋 The Last Roar</span><span class="muted small" id="final-hint"></span></div>
+        <div class="match-top"><span class="tag">🌋 The Last Roar</span>${f.by ? `<span class="tag tag-custom">✍️ prompt by ${esc(f.by)}</span>` : ''}<span class="muted small" id="final-hint"></span></div>
         <h2 class="prompt-text big">${esc(f.prompt)}</h2>
         <div class="final-grid ${reveal ? 'revealed' : ''}">
           ${list.map((a, i) => finalCard(a, i, f, reveal)).join('')}
@@ -459,6 +504,7 @@
         ${!reveal && canVote ? `<button id="final-submit" class="btn btn-primary btn-xl full" disabled>Pick up to ${f.maxVotes}</button>` : ''}
         <p class="vote-status" id="vote-status"></p>
         ${reveal ? '<div class="center"><button class="btn btn-ghost btn-small host-only" data-next>See the winner ▶</button></div>' : ''}
+        ${laterMarkup(reveal || !!f.myVote)}
       </div>`;
     });
     if (built && canVote) {
@@ -477,6 +523,7 @@
     const status = $('#vote-status');
     if (!reveal) status.textContent = st.role === 'tv' ? `${f.votedCount} of ${f.voterCount} voted…` : f.myVote ? `Votes locked! ${f.votedCount} of ${f.voterCount} in…` : `Tap up to ${f.maxVotes} favorites (not your own).`;
     else status.textContent = '';
+    showLater(reveal || !!f.myVote);
   }
   function paintPicks() {
     const f = S.st.final; const locked = f.myVote;
@@ -524,6 +571,7 @@
           <div class="card"><h3>🏆 Final scores</h3><ol class="scoreboard" id="final-board"></ol></div>
           ${best.length ? `<div class="card"><h3>🔥 Top quips of the game</h3><ul class="best">${best.map(b => `<li><small>${esc(b.prompt)}</small><b>“${esc(b.text)}”</b><span>${avatarOf(b.id, 'xs')} ${esc(pname(b.id))} · +${b.points}</span></li>`).join('')}</ul></div>` : ''}
         </div>
+        ${laterMarkup()}
         <div class="end-actions">
           <button class="btn btn-mint btn-xl host-only" id="again-btn">🔁 Play again</button>
           <span class="muted guest-only" id="end-wait">${TV ? 'Waiting for the host to start another game…' : 'Waiting for the host to start another game…'}</span>
@@ -571,14 +619,35 @@
   }
   function stopTimer() { cancelAnimationFrame(S.timerRAF); }
 
-  // ---------- reactions ----------
-  $('#react-bar').innerHTML = REACTS.map(r => `<button data-r="${r}" aria-label="React ${r}">${r}</button>`).join('');
-  $('#react-bar').addEventListener('click', e => { const b = e.target.closest('[data-r]'); if (b) socket.emit('react', b.dataset.r); });
-  socket.on('react', ({ emoji }) => {
+  // ---------- reactions (always on screen once you're in a room; see public/reactions.js) ----------
+  let reactUntil = 0;
+  $('#react-bar').innerHTML = `<button type="button" id="react-mute" aria-pressed="true" aria-label="Mute reaction sounds" title="Mute reaction sounds">🔔</button>`
+    + REACTIONS.map(r => `<button type="button" data-react="${esc(r.id)}" aria-label="${esc(r.label)}" title="${esc(r.label)}">${r.emoji}</button>`).join('');
+  function renderReactMute(st = Sfx.state()) {
+    const btn = $('#react-mute'); if (!btn) return;
+    const on = st.reactions !== false;
+    btn.textContent = on ? '🔔' : '🔇';
+    btn.classList.toggle('off', !on);
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Mute reaction sounds' : 'Unmute reaction sounds');
+    btn.title = btn.getAttribute('aria-label');
+  }
+  $('#react-bar').addEventListener('click', e => {
+    if (e.target.closest('#react-mute')) { Sfx.unlock(); Sfx.toggleReactions(); return; }
+    const b = e.target.closest('[data-react]'); if (!b) return;
+    Sfx.unlock();
+    const t = Date.now(); if (t < reactUntil) return;
+    reactUntil = t + 1000;
+    $('#react-bar').classList.add('cooling');
+    setTimeout(() => $('#react-bar').classList.remove('cooling'), 1000);
+    socket.emit('react', b.dataset.react);
+  });
+  socket.on('react', ({ emoji, id }) => {
+    if (!emoji) return;
     const f = document.createElement('div'); f.className = 'floater'; f.textContent = emoji;
-    f.style.left = (10 + Math.random() * 80) + '%'; f.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px'); f.style.setProperty('--rot', (Math.random() * 60 - 30) + 'deg');
+    f.style.left = (8 + Math.random() * 84) + '%'; f.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px'); f.style.setProperty('--rot', (Math.random() * 60 - 30) + 'deg');
     $('#floaters').appendChild(f); setTimeout(() => f.remove(), 2500);
-    if (emoji === '🦖') Sfx.roar(0.7); else Sfx.react();
+    Sfx.playReaction(id);
   });
 
   // ---------- sound panel ----------
@@ -592,6 +661,7 @@
     if (document.activeElement !== $('#sfx-vol')) $('#sfx-vol').value = Math.round(st.sfxVol * 100);
     $('#mute-btn').classList.toggle('needs-tap', !st.running && (st.music || st.sfx));
     $('#audio-hint').textContent = st.running ? 'All music & sounds are made live in your browser.' : 'Tap anywhere to start the music.';
+    renderReactMute(st);
   }
   Sfx.onChange(renderAudio); renderAudio();
   const setPanel = (open) => { panel.classList.toggle('hidden', !open); $('#mute-btn').setAttribute('aria-expanded', String(open)); if (open) renderAudio(); };
@@ -603,7 +673,7 @@
   $('#sfx-vol').addEventListener('change', () => Sfx.pop());
   document.addEventListener('click', (e) => { if (!panel.classList.contains('hidden') && !e.target.closest('.audio-ctl')) setPanel(false); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.classList.contains('hidden')) { setPanel(false); $('#mute-btn').focus(); } });
-  document.addEventListener('click', (e) => { if (e.target.closest('button:not(:disabled)')) Sfx.click(); });
+  document.addEventListener('click', (e) => { if (e.target.closest('#react-bar')) return; if (e.target.closest('button:not(:disabled)')) Sfx.click(); });
   window.addEventListener('beforeunload', (e) => { if (S.st && !TV && ['answer', 'vote', 'fvote'].includes(S.st.phase)) { e.preventDefault(); e.returnValue = ''; } });
 
   renderProfile();

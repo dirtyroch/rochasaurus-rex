@@ -25,6 +25,9 @@ const FINAL_VOTES = 3;
 const FINAL_FAVE_BONUS = 500;
 const MAX_ANSWER = 80;
 const MAX_CUSTOM_EACH = 3;
+const REACT_COOLDOWN_MS = 1000;
+const REACTIONS = require('./public/reactions');
+const REACTION_IDS = new Set(REACTIONS.map(r => r.id));
 
 const AVATAR_EMOJI = ['🦖','🦕','🐊','🐢','🦎','🐉','🐲','🥚','🌋','🦴','🌵','🤠','🐸','🦊','🐼','🐙','🦄','🐧'];
 const AVATAR_COLORS = ['#ff6b5b','#ffb238','#ffe066','#5ad1a7','#4cc9f0','#7b8cff','#c77dff','#ff7eb6','#9bdb4d','#f4a261'];
@@ -51,7 +54,7 @@ const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) {
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rid = () => Math.random().toString(36).slice(2, 10);
 
-// Family filter: masks common profanity with grawlix so the game stays clean.
+// Optional family filter. Off unless the host turns it on. Length limits and HTML stripping always apply.
 const BAD = /\b(f+u+c+k\w*|sh+i+t+\w*|bullshit\w*|bitch\w*|asshole\w*|ass(es)?|bastard\w*|damn\w*|goddamn\w*|hell|dick(s|head)?|cock(s)?|cunt\w*|slut\w*|whore\w*|porn\w*|nigg\w*|fag\w*|retard\w*|crap\w*|piss\w*|wtf|stfu|boob(s|ies)?|tits?|titties|penis\w*|vagina\w*|sex|sexy|horny|douche\w*|jackass|dumbass|wh0re|f\*ck|sh\*t)\b/gi;
 const GRAWLIX = '#@$%&!';
 function familyFilter(s) { return s.replace(BAD, (w) => Array.from(w, (_, i) => GRAWLIX[i % GRAWLIX.length]).join('')); }
@@ -60,7 +63,7 @@ function cleanLine(s, max, filter) {
   if (filter) t = familyFilter(t);
   return t;
 }
-const cleanName = (s) => cleanLine(s, 16, true);
+const cleanName = (s, filter = false) => cleanLine(s, 16, !!filter);
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 
 /**
@@ -75,22 +78,63 @@ function makePairs(ids) {
   return o.map((id, i) => [id, o[(i + 1) % n]]);
 }
 
+/**
+ * Give each drawn prompt to one pair. Prefer a pair that does not include the author, so a player
+ * does not have to answer their own prompt when any other pairing is free. Every prompt is used once.
+ */
+function assignPrompts(pairs, drawn) {
+  const n = pairs.length;
+  if (!n) return [];
+  if (drawn.length !== n) return pairs.map((_, i) => drawn[Math.min(i, drawn.length - 1)]);
+  const order = drawn.map((d, i) => i).sort((a, b) => (drawn[a].by ? 0 : 1) - (drawn[b].by ? 0 : 1));
+  let best = null;
+  let bestCost = Infinity;
+  const used = new Uint8Array(n);
+  const assign = new Array(n);
+  function bt(k, cost) {
+    if (cost >= bestCost) return;
+    if (k === n) { bestCost = cost; best = assign.slice(); return; }
+    const di = order[k];
+    const by = drawn[di].by;
+    for (let pass = 0; pass < 2; pass++) {
+      for (let p = 0; p < n; p++) {
+        if (used[p]) continue;
+        const clash = by && pairs[p].includes(by) ? 1 : 0;
+        if (pass === 0 && clash) continue;
+        if (pass === 1 && !clash) continue;
+        if (cost + clash >= bestCost) continue;
+        used[p] = 1;
+        assign[di] = p;
+        bt(k + 1, cost + clash);
+        used[p] = 0;
+        if (bestCost === 0) return;
+      }
+      if (bestCost === 0) return;
+    }
+  }
+  bt(0, 0);
+  if (!best) return drawn.slice();
+  const result = new Array(n);
+  for (let di = 0; di < n; di++) result[best[di]] = drawn[di];
+  return result;
+}
+
 // ---------- room/state ----------
 function makeRoom() {
   const code = newCode();
   const r = {
     code, hostId: null, phase: 'lobby', players: new Map(), audience: new Map(), sockets: new Map(),
-    settings: { pack: 'family', pace: 'normal', filter: true },
+    settings: { pack: 'family', pace: 'normal', filter: false },
     custom: [], used: new Set(), game: null, timer: null, created: Date.now(),
   };
   rooms.set(code, r);
   return r;
 }
-function makeMember(data) {
+function makeMember(data, filter) {
   const id = (data && typeof data.playerId === 'string' && /^[a-z0-9-]{8,40}$/i.test(data.playerId)) ? data.playerId : 'p' + rid() + Date.now().toString(36);
   const av = (data && data.avatar) || {};
   return {
-    id, name: cleanName(data && data.name) || 'Dino',
+    id, name: cleanName(data && data.name, filter) || 'Dino',
     avatar: { emoji: AVATAR_EMOJI.includes(av.emoji) ? av.emoji : AVATAR_EMOJI[0], color: AVATAR_COLORS.includes(av.color) ? av.color : AVATAR_COLORS[0] },
     socketId: null, connected: false, dropTimer: null,
   };
@@ -123,7 +167,7 @@ function drawPrompts(r, count, final) {
   if (fresh.length < count) { pool.forEach(p => r.used.delete(p)); fresh = pool.slice(); }
   const out = [];
   if (!final) {
-    // custom prompts from the lobby go first, but at most half of a round so they spread out
+    // player-written prompts (lobby or while waiting) go first, at most half a round so they spread out
     const customs = shuffle(r.custom.filter(c => !c.used));
     for (const c of customs.slice(0, Math.ceil(count / 2))) { if (out.length >= count) break; c.used = true; out.push({ text: c.text, by: c.by }); }
   }
@@ -163,7 +207,11 @@ function nextRound(r) {
   } else {
     const pairs = makePairs(live);
     const drawn = drawPrompts(r, pairs.length, false);
-    g.prompts = pairs.map((pair, i) => ({ id: rid(), text: fillPlayer(r, drawn[i].text, pair), by: drawn[i].by, players: pair, answers: {} }));
+    const assigned = assignPrompts(pairs, drawn);
+    g.prompts = pairs.map((pair, i) => {
+      const src = assigned[i] || drawn[i];
+      return { id: rid(), text: fillPlayer(r, src.text, pair), by: src.by, players: pair, answers: {} };
+    });
   }
   g.order = shuffle(g.prompts.map((_, i) => i)); g.mi = 0;
   setPhase(r, 'intro', fixedDur(T.intro), () => startAnswering(r));
@@ -349,7 +397,7 @@ function viewFor(r, viewer) {
     const final = g.round === g.totalRounds;
     v.answer = {
       final,
-      mine: role === 'player' ? promptsFor(g, you).map(p => ({ id: p.id, text: p.text, answer: p.answers[you]?.text || null, safety: !!p.answers[you]?.safety })) : [],
+      mine: role === 'player' ? promptsFor(g, you).map(p => ({ id: p.id, text: p.text, by: p.by ? nameOf(r, p.by) : null, answer: p.answers[you]?.text || null, safety: !!p.answers[you]?.safety })) : [],
       done: g.live.filter(id => promptsFor(g, id).every(p => p.answers[id])),
       waiting: g.live.filter(id => !promptsFor(g, id).every(p => p.answers[id])),
       promptCount: g.prompts.length,
@@ -371,7 +419,7 @@ function viewFor(r, viewer) {
   if (r.phase === 'fvote' || r.phase === 'fresult' || r.phase === 'end') {
     const pr = g.prompts[0]; const reveal = r.phase !== 'fvote';
     v.final = {
-      prompt: pr.text, maxVotes: FINAL_VOTES, myVote: pr.votes?.[you]?.choice || null,
+      prompt: pr.text, by: pr.by ? nameOf(r, pr.by) : null, maxVotes: FINAL_VOTES, myVote: pr.votes?.[you]?.choice || null,
       votedCount: Object.keys(pr.votes || {}).length, voterCount: connectedPlayers(r).filter(p => g_has(r, p.id)).length,
       answers: (pr.side || []).map(id => ({ key: id, text: pr.answers[id].text, mine: id === you,
         ...(reveal ? { authorId: id, safety: !!pr.answers[id].safety } : {}) })),
@@ -428,7 +476,7 @@ io.on('connection', (socket) => {
         const old = io.sockets.sockets.get(existing.socketId);
         if (old) { old.emit('kicked', { reason: 'You opened this game in another tab.' }); old.leave(r.code); r.sockets.delete(old.id); }
       }
-      if (data.name && r.phase === 'lobby') existing.name = uniqueName(r, cleanName(data.name) || existing.name, existing.id);
+      if (data.name && r.phase === 'lobby') existing.name = uniqueName(r, cleanName(data.name, r.settings.filter) || existing.name, existing.id);
       const k = r.players.has(existing.id) ? 'player' : 'audience';
       bind(r, existing, k);
       cb({ ok: true, code, you: existing.id, role: k, rejoined: true });
@@ -437,9 +485,9 @@ io.on('connection', (socket) => {
       return;
     }
     if (r.wasKicked && r.wasKicked.has(pid)) return cb({ error: 'The host removed you from this room.' });
-    const name = cleanName(data && data.name);
+    const name = cleanName(data && data.name, r.settings.filter);
     if (!name) return cb({ error: 'Pick a nickname first.' });
-    const m = makeMember(data); m.name = uniqueName(r, name, m.id);
+    const m = makeMember(data, r.settings.filter); m.name = uniqueName(r, name, m.id);
     const asAudience = r.phase !== 'lobby' || r.players.size >= MAX_PLAYERS || (data && data.audience);
     if (asAudience) {
       if (r.audience.size >= MAX_AUDIENCE) return cb({ error: 'This room is packed, even the audience is full!' });
@@ -471,17 +519,17 @@ io.on('connection', (socket) => {
 
   socket.on('custom', (text, ack) => {
     const cb = ackFn(ack);
-    if (!room || !me || room.phase !== 'lobby') return cb({ error: 'Add prompts in the lobby.' });
+    if (!room || !me || K() === 'tv') return cb({ error: 'Join a room on your phone to add a prompt.' });
     const mine = room.custom.filter(c => c.by === me.id && !c.used);
     if (mine.length >= MAX_CUSTOM_EACH) return cb({ error: `Up to ${MAX_CUSTOM_EACH} prompts each. Save some for later!` });
-    const t = cleanLine(text, 100, true);
+    const t = cleanLine(text, 100, room.settings.filter);
     if (t.length < 4) return cb({ error: 'That prompt is a little short.' });
     if (room.custom.some(c => norm(c.text) === norm(t))) return cb({ error: 'Someone already added that one!' });
     room.custom.push({ text: t, by: me.id, used: false });
     cb({ ok: true }); sync(room);
   });
   socket.on('custom:remove', (i) => {
-    if (!room || !me || room.phase !== 'lobby') return;
+    if (!room || !me || K() === 'tv') return;
     const mine = room.custom.filter(c => c.by === me.id && !c.used);
     const c = mine[i]; if (c) { room.custom.splice(room.custom.indexOf(c), 1); sync(room); }
   });
@@ -534,10 +582,13 @@ io.on('connection', (socket) => {
     void g;
   });
 
-  socket.on('react', (emoji) => {
-    if (!room || !me || typeof emoji !== 'string' || !['😂','🔥','💀','👏','😱','🦖'].includes(emoji)) return;
-    const now = Date.now(); if (me.lastReact && now - me.lastReact < 250) return; me.lastReact = now;
-    io.to(room.code).emit('react', { emoji, from: me.id });
+  socket.on('react', (id) => {
+    if (!room || !me || typeof id !== 'string' || !REACTION_IDS.has(id)) return;
+    const now = Date.now();
+    if (me.lastReact && now - me.lastReact < REACT_COOLDOWN_MS) return;
+    me.lastReact = now;
+    const emoji = REACTIONS.find(r => r.id === id).emoji;
+    io.to(room.code).emit('react', { id, emoji, from: me.id });
   });
 
   socket.on('lobby', () => { // play again
@@ -593,4 +644,4 @@ function cleanupMaybe(r) {
 }
 
 if (require.main === module) server.listen(PORT, '0.0.0.0', () => console.log(`Rochasaurus Rex running on http://localhost:${PORT}`));
-module.exports = { server, rooms, makePairs, familyFilter, tally };
+module.exports = { server, rooms, makePairs, assignPrompts, familyFilter, tally, REACT_COOLDOWN_MS };

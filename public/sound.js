@@ -5,7 +5,7 @@ window.Sfx = (() => {
   // ---------- settings (persisted) ----------
   const KEY = 'rrx-audio';
   const settings = (() => {
-    const d = { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8 };
+    const d = { music: true, sfx: true, musicVol: 0.5, sfxVol: 0.8, reactions: true };
     try {
       const s = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (s) return { ...d, ...s };
@@ -344,6 +344,69 @@ window.Sfx = (() => {
     const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 5000; f.connect(g); noise(t + 0.16, 1.4, f);
   }
 
+  // Toolbox handed to each entry in public/reactions.js. Sources stop themselves and drop their nodes.
+  function drop(source, ...nodes) {
+    try { source.onended = () => { for (const n of [source, ...nodes]) { try { n.disconnect(); } catch { /* ignore */ } } }; } catch { /* ignore */ }
+  }
+  const reactionFx = {
+    tone({ freq = 440, dur = 0.15, type = 'sine', vol = 0.15, slide = 0, delay = 0 } = {}) {
+      const t = now() + delay; const g = ctx.createGain(); g.connect(sfxBus);
+      env(g, t, 0.006, vol, Math.max(0.02, dur));
+      const o = osc(type, Math.max(40, freq), t, t + dur + 0.03, g);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), t + dur);
+      drop(o, g);
+    },
+    burst({ dur = 0.2, vol = 0.12, delay = 0, filter = 'bandpass', freq = 1000, freqTo = 0, q = 1, flutter = 0, flutterDepth = 0, hold = false } = {}) {
+      const t = now() + delay; const g = ctx.createGain(); g.connect(sfxBus);
+      if (hold) {
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + 0.02);
+        g.gain.setValueAtTime(Math.max(vol * 0.8, 0.0002), t + dur * 0.7);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      } else env(g, t, 0.004, vol, dur);
+      const f = ctx.createBiquadFilter(); f.type = filter; f.Q.value = q; f.connect(g);
+      const base = Math.max(80, freq);
+      f.frequency.setValueAtTime(base, t);
+      if (freqTo) f.frequency.exponentialRampToValueAtTime(Math.max(80, freqTo), t + Math.max(0.02, dur));
+      if (flutter && flutterDepth) {
+        const lfo = ctx.createOscillator(); lfo.frequency.value = flutter;
+        const lg = ctx.createGain(); lg.gain.value = Math.min(flutterDepth, base * 0.45);
+        lfo.connect(lg).connect(f.frequency); lfo.start(t); lfo.stop(t + dur + 0.02);
+      }
+      drop(noise(t, dur, f), g, f);
+    },
+    voice({ f0 = 200, f0to = 0, dur = 0.5, vol = 0.1, delay = 0, f1 = 500, f1to = 0, f2 = 1500, f2to = 0, vibrato = 0, breath = 0 } = {}) {
+      const t = now() + delay; const g = ctx.createGain(); g.connect(sfxBus);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.0002), t + Math.min(0.045, dur * 0.3));
+      g.gain.setValueAtTime(Math.max(vol * 0.9, 0.0002), t + dur * 0.72);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      const bp1 = ctx.createBiquadFilter(); bp1.type = 'bandpass'; bp1.Q.value = 5; bp1.connect(g);
+      const bp2 = ctx.createBiquadFilter(); bp2.type = 'bandpass'; bp2.Q.value = 7; bp2.connect(g);
+      bp1.frequency.setValueAtTime(Math.max(80, f1), t);
+      bp2.frequency.setValueAtTime(Math.max(120, f2), t);
+      if (f1to) bp1.frequency.linearRampToValueAtTime(Math.max(80, f1to), t + dur);
+      if (f2to) bp2.frequency.linearRampToValueAtTime(Math.max(120, f2to), t + dur);
+      const o = osc('sawtooth', Math.max(40, f0), t, t + dur + 0.02, bp1);
+      o.connect(bp2);
+      const end = Math.max(40, f0to || f0);
+      if (f0to) o.frequency.linearRampToValueAtTime(end, t + dur);
+      if (vibrato) {
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 5.2;
+        const lg = ctx.createGain(); lg.gain.value = vibrato;
+        lfo.connect(lg).connect(o.frequency); lfo.start(t); lfo.stop(t + dur + 0.02);
+      }
+      drop(o, g, bp1, bp2);
+      if (breath) {
+        const ng = ctx.createGain(); ng.connect(sfxBus); env(ng, t, 0.02, vol * breath, dur * 0.8);
+        const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = Math.max(200, f2 * 0.6); nf.Q.value = 0.6; nf.connect(ng);
+        drop(noise(t, dur, nf), ng, nf);
+      }
+    },
+    roar(size = 0.7) { roar(0, size); },
+    duck(amount = 0.5, hold = 1) { duck(amount, hold); },
+  };
+
   const api = {
     // ----- state + controls -----
     get muted() { return !settings.sfx && !settings.music; },
@@ -357,6 +420,21 @@ window.Sfx = (() => {
     },
     setMusic(on) { settings.music = !!on; save(); applyMusicVol(0.6); emit(); },
     setSfx(on) { settings.sfx = !!on; save(); applySfxVol(); emit(); if (on) api.pop(); },
+    reactionsOn() { return settings.reactions !== false; },
+    toggleReactions() {
+      settings.reactions = settings.reactions === false;
+      save(); emit();
+      if (settings.reactions && sfxReady()) tone(880, 0.05, { type: 'sine', vol: 0.07 });
+      return settings.reactions !== false;
+    },
+    playReaction(id) {
+      if (settings.reactions === false) return;
+      if (!sfxReady()) return;
+      const list = (typeof window !== 'undefined' && window.REACTIONS) || [];
+      const r = list.find(x => x.id === id);
+      if (!r || typeof r.play !== 'function') return;
+      try { r.play(reactionFx); } catch { /* a bad sound never breaks the game */ }
+    },
     setMusicVol(v) { settings.musicVol = Math.min(1, Math.max(0, +v)); if (settings.musicVol > 0 && !settings.music) settings.music = true; save(); applyMusicVol(0.15); emit(); },
     setSfxVol(v) { settings.sfxVol = Math.min(1, Math.max(0, +v)); if (settings.sfxVol > 0 && !settings.sfx) settings.sfx = true; save(); applySfxVol(); emit(); },
     toggle() { const off = !api.muted; settings.music = !off; settings.sfx = !off; save(); applyMusicVol(); applySfxVol(); emit(); return off; },

@@ -181,12 +181,12 @@
         <ul id="player-list" class="player-list"></ul>
         <div id="audience-box" class="audience-box hidden"><b>🍿 Audience</b> <span id="audience-list"></span></div>
         <div class="custom-box">
-          <h3>✍️ Add your own prompts <small class="muted">(optional, up to 3 each)</small></h3>
-          <form id="custom-form" class="join-row">
-            <input id="custom-input" class="input" maxlength="100" placeholder="e.g. The worst thing to bring to Mike's house" autocomplete="off">
+          <h3>✍️ Write a prompt for later <small class="muted">(optional, up to 3 each)</small></h3>
+          <form id="custom-form" class="join-row" data-later>
+            <input id="custom-input" class="input later-input" maxlength="100" placeholder="e.g. The worst thing to bring to Mike's house" autocomplete="off" enterkeyhint="done">
             <button class="btn btn-mint btn-small" type="submit">Add</button>
           </form>
-          <ul id="my-custom" class="my-custom"></ul>
+          <ul id="my-custom" class="my-custom later-mine"></ul>
           <p id="custom-note" class="muted small"></p>
         </div>
       </div>
@@ -200,7 +200,7 @@
         <label class="toggle">
           <input type="checkbox" id="filter-toggle">
           <span class="toggle-ui"></span>
-          <span><b>🧼 Family filter</b><br><small class="muted">Swaps bad words for #@$%! in answers and names.</small></span>
+          <span><b>🧼 Family filter</b><br><small class="muted">Off by default. Turn it on to swap bad words for #@$%! in new answers, prompts, and nicknames.</small></span>
         </label>
         <button id="start-btn" class="btn btn-primary btn-xl full">🦖 Let's roar!</button>
         <p id="start-hint" class="muted small center"></p>
@@ -219,17 +219,18 @@
       <div class="mini-roster" id="mini-roster"></div>
     </div>
     <div id="view" class="view"></div>
-    <div class="react-bar" id="react-bar"></div>
-    <div id="floaters" class="floaters" aria-hidden="true"></div>
   </section>
 
 </main>
 
+<div class="react-bar hidden" id="react-bar" role="toolbar" aria-label="Reaction sounds"></div>
+<div id="floaters" class="floaters" aria-hidden="true"></div>
 <div id="toast" class="toast" role="status"></div>
 <div id="curtain" class="curtain hidden"><div class="curtain-inner"><svg class="curtain-dino" viewBox="0 0 220 220" aria-hidden="true"><use href="#dino"/></svg><div class="curtain-text" id="curtain-text"></div><div class="curtain-sub" id="curtain-sub"></div></div></div>
 <div id="confetti" class="confetti" aria-hidden="true"></div>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/reactions.js"></script>
 <script src="/sound.js"></script>
 <script src="/app.js"></script>
 </body>
