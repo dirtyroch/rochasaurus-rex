@@ -660,7 +660,7 @@
     if (document.activeElement !== $('#music-vol')) $('#music-vol').value = Math.round(st.musicVol * 100);
     if (document.activeElement !== $('#sfx-vol')) $('#sfx-vol').value = Math.round(st.sfxVol * 100);
     $('#mute-btn').classList.toggle('needs-tap', !st.running && (st.music || st.sfx));
-    $('#audio-hint').textContent = st.running ? 'All music & sounds are made live in your browser.' : 'Tap anywhere to start the music.';
+    $('#audio-hint').textContent = st.running ? 'Music and game sounds are made live in your browser.' : 'Tap anywhere to start the music.';
     renderReactMute(st);
   }
   Sfx.onChange(renderAudio); renderAudio();

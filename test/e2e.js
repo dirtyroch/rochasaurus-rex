@@ -93,7 +93,21 @@ const close = (cs) => cs.forEach(c => c.s.close());
   ok(!/jackbox|quiplash|quiplash/i.test(require('fs').readFileSync(require.resolve('../prompts')) + require('fs').readFileSync(require.resolve('../server'))), 'no third-party game names in prompts/server');
   ok(familyFilter('what the hell, damn it') !== 'what the hell, damn it' && familyFilter('hello shell') === 'hello shell', 'family filter masks bad words but not innocent ones');
   const need = ['💩', '🍑', '🗣️', '👎', '👍'];
-  ok(need.every(e => REACTIONS.some(r => r.emoji === e && typeof r.play === 'function')) && new Set(REACTIONS.map(r => r.id)).size === REACTIONS.length, 'soundboard config has plop, squeak, hype, boo, and cheer');
+  ok(need.every(e => REACTIONS.some(r => r.emoji === e && (r.file || typeof r.play === 'function'))) && new Set(REACTIONS.map(r => r.id)).size === REACTIONS.length, 'soundboard config has plop, squeak, hype, boo, and cheer');
+  {
+    const fs = require('fs');
+    const path = require('path');
+    const recorded = REACTIONS.filter(r => r.file);
+    ok(recorded.length > 0 && recorded.every(r => {
+      const file = path.join(__dirname, '..', 'public', r.file);
+      try {
+        const st = fs.statSync(file);
+        return st.isFile() && st.size > 0 && st.size <= 60 * 1024;
+      } catch { return false; }
+    }), 'every configured reaction sound file exists and is under 60KB');
+    const roar = REACTIONS.find(r => r.emoji === '🦖');
+    ok(roar && roar.id === 'roar' && typeof roar.play === 'function' && !roar.file, 'rex roar stays a synthesized sound');
+  }
   ok(REACT_COOLDOWN_MS >= 1000, 'reaction cooldown is about a second');
   {
     const pairs = [['a', 'b'], ['b', 'c'], ['c', 'a']];
