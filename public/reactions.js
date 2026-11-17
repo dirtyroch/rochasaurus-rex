@@ -6,8 +6,9 @@
 //   { id: 'roar', emoji: '🦖', label: 'Roar', play(fx) { fx.roar(0.7); } },
 //
 // id     unique short name the server broadcasts
-// emoji  the button
+// emoji  the button, and what the room broadcasts
 // label  screen-reader name
+// img    optional image under public/, drawn instead of the emoji glyph on the button and the floater
 // file   optional clip under public/ (fetched as /sounds/....mp3). Credits: public/sounds/README.md
 // duck   optional [amount, hold] — dip the music under a loud clip
 // gain   optional playback level (default 1)
@@ -27,10 +28,10 @@
     { id: 'yay', emoji: '👍', label: 'Cheer', file: 'sounds/yay.mp3', duck: [0.55, 1.2] },
     { id: 'laugh', emoji: '😂', label: 'Laugh', file: 'sounds/laugh.mp3' },
     { id: 'fire', emoji: '🔥', label: 'Fire', file: 'sounds/fire.mp3' },
-    { id: 'skull', emoji: '💀', label: 'Skull', file: 'sounds/skull.mp3' },
+    { id: 'skull', emoji: '💀', label: 'Bone rattle', file: 'sounds/skull.mp3' },
     { id: 'clap', emoji: '👏', label: 'Clap', file: 'sounds/clap.mp3' },
     { id: 'gasp', emoji: '😱', label: 'Gasp', file: 'sounds/gasp.mp3' },
-    { id: 'roar', emoji: '🦖', label: 'Roar', play(fx) {
+    { id: 'roar', emoji: '🦖', label: 'Roar', img: 'twemoji-1f996.svg', play(fx) {
       fx.duck(0.4, 0.8);
       fx.roar(0.7);
     } },
