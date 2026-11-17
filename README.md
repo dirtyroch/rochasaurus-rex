@@ -54,7 +54,8 @@ A synthesized sound:
 ```
 
 - `id` is a unique short name. The server only broadcasts ids from this list.
-- `emoji` is the button. `label` is the screen-reader name.
+- `emoji` is the button, and the glyph the room broadcasts. `label` is the screen-reader name.
+- `img` is an optional image under `public/`, such as `twemoji-1f996.svg`. The button and the floating reaction draw that image instead of the emoji glyph. `emoji` is still what gets broadcast.
 - `file` is a path under `public/`, such as `sounds/boing.mp3`. The player requests it from the site root (`/sounds/boing.mp3`) so it still works on `/r/CODE`. After the audio unlock, every `file` is fetched and decoded into a Web Audio buffer, so the next tap starts immediately (including on mobile Safari).
 - `duck` is an optional `[amount, hold]` pair. It dips the music the same way `fx.duck` does. `gain` is an optional level, default 1.
 - `play` runs on every phone in the room when you want a synthesized sound. It receives `fx`:
@@ -67,12 +68,12 @@ Use a recording that is CC0 or public domain. Trim it to 2 seconds or less (a sh
 
 The new button shows up on the bar by itself. The first tap in the room unlocks audio on phones (including mobile Safari); the same unlock the music already uses. Buffers preload on that unlock.
 
-The recorded set is a toilet plop (💩), a long wet fart with a squeaky tail (🍑), a whooping hype shout (🗣️), a crowd “boo” (👎), a group “yay” (👍), a laugh (😂), a fire whoosh (🔥), a bone crack (💀), clapping (👏), and a crowd gasp (😱). Rex (🦖) still uses the synthesized roar.
+The recorded set is a toilet plop (💩), a long wet fart with a squeaky tail (🍑), a whooping hype shout (🗣️), a crowd “boo” (👎), a group “yay” (👍), a laugh (😂), a fire whoosh (🔥), a bone rattle (💀), clapping (👏), and a crowd gasp (😱). Rex (🦖) still uses the synthesized roar. The roar button draws a bundled green T-rex instead of the system emoji.
 
 ## Tests
 
 ```bash
-npm test               # 77 socket-level checks: pairing 3–10 players, full 3- and 10-player games, scoring, sweeps, jinx, safety quips, audience, kick, rejoin, custom prompts, prompts written mid-game, play again, filter off by default, reaction broadcast and cooldown, and that every configured reaction file exists
+npm test               # 78 socket-level checks: pairing 3–10 players, full 3- and 10-player games, scoring, sweeps, jinx, safety quips, audience, kick, rejoin, custom prompts, prompts written mid-game, play again, filter off by default, reaction broadcast and cooldown, and that every configured reaction file exists
 npm run test:browser   # a full game through the real UI in headless Chrome (desktop host, 3 phones, big screen) with screenshots
 npm run test:audio     # mobile audio-unlock regression (normal autoplay rules)
 npm run test:audio-pages  # the right music actually plays on every screen
@@ -86,4 +87,4 @@ The browser tests need Chrome at `/usr/bin/google-chrome`.
 
 ---
 
-All names, art, music, and prompts are original. The reaction recordings are CC0; see `public/sounds/README.md`.
+All names, art, music, and prompts are original. The reaction recordings are CC0; see `public/sounds/README.md`. The roar button’s T-rex is from Twemoji (copyright Twitter, Inc and other contributors), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): https://github.com/twitter/twemoji

@@ -621,8 +621,13 @@
 
   // ---------- reactions (always on screen once you're in a room; see public/reactions.js) ----------
   let reactUntil = 0;
+  function reactionFace(r) {
+    if (!r.img) return r.emoji;
+    const src = '/' + String(r.img).replace(/^\/+/, '');
+    return `<img src="${esc(src)}" alt="" draggable="false">`;
+  }
   $('#react-bar').innerHTML = `<button type="button" id="react-mute" aria-pressed="true" aria-label="Mute reaction sounds" title="Mute reaction sounds">🔔</button>`
-    + REACTIONS.map(r => `<button type="button" data-react="${esc(r.id)}" aria-label="${esc(r.label)}" title="${esc(r.label)}">${r.emoji}</button>`).join('');
+    + REACTIONS.map(r => `<button type="button" data-react="${esc(r.id)}" aria-label="${esc(r.label)}" title="${esc(r.label)}">${reactionFace(r)}</button>`).join('');
   function renderReactMute(st = Sfx.state()) {
     const btn = $('#react-mute'); if (!btn) return;
     const on = st.reactions !== false;
@@ -644,7 +649,15 @@
   });
   socket.on('react', ({ emoji, id }) => {
     if (!emoji) return;
-    const f = document.createElement('div'); f.className = 'floater'; f.textContent = emoji;
+    const r = REACTIONS.find(x => x.id === id);
+    const f = document.createElement('div'); f.className = 'floater';
+    if (r && r.img) {
+      const img = document.createElement('img');
+      img.src = '/' + String(r.img).replace(/^\/+/, '');
+      img.alt = '';
+      img.draggable = false;
+      f.appendChild(img);
+    } else f.textContent = emoji;
     f.style.left = (8 + Math.random() * 84) + '%'; f.style.setProperty('--dx', (Math.random() * 120 - 60) + 'px'); f.style.setProperty('--rot', (Math.random() * 60 - 30) + 'deg');
     $('#floaters').appendChild(f); setTimeout(() => f.remove(), 2500);
     Sfx.playReaction(id);

@@ -107,6 +107,11 @@ const close = (cs) => cs.forEach(c => c.s.close());
     }), 'every configured reaction sound file exists and is under 60KB');
     const roar = REACTIONS.find(r => r.emoji === '🦖');
     ok(roar && roar.id === 'roar' && typeof roar.play === 'function' && !roar.file, 'rex roar stays a synthesized sound');
+    const images = REACTIONS.filter(r => r.img);
+    ok(images.every(r => {
+      const file = path.join(__dirname, '..', 'public', r.img);
+      try { const st = fs.statSync(file); return st.isFile() && st.size > 0; } catch { return false; }
+    }), 'every configured reaction image exists');
   }
   ok(REACT_COOLDOWN_MS >= 1000, 'reaction cooldown is about a second');
   {

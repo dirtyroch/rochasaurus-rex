@@ -15,8 +15,10 @@ Files are mono 128 kbps CBR MP3 so Chrome, Firefox, and Safari (including mobile
 | `yay.mp3` | 👍 Cheer | A small group yelling “Yay!” | [Group_Yay_Cheer.wav](https://freesound.org/people/Stevedrums/sounds/393402/) by Stevedrums on Freesound | CC0 1.0 |
 | `laugh.mp3` | 😂 Laugh | A person laughing | [Man's laugh](https://freesound.org/people/quavosh/sounds/670839/) by quavosh on Freesound | CC0 1.0 |
 | `fire.mp3` | 🔥 Fire | A real fire whoosh (diesel on a fire) | [fire-whoosh.wav](https://freesound.org/people/hnhnh/sounds/244926/) by hnhnh on Freesound. The author also applied pitch and EQ | CC0 1.0 |
-| `skull.mp3` | 💀 Skull | A real bone crack | [KleAudio_CrackingBone2_msST.wav](https://freesound.org/people/kleanthism/sounds/145363/) by kleanthism on Freesound | CC0 1.0 |
+| `skull.mp3` | 💀 Bone rattle | A dry skeleton-bone rattle | [Rattling Bones.wav](https://freesound.org/people/spookymodem/sounds/202102/) by spookymodem on Freesound. Described as a skeleton’s bones rattling | CC0 1.0 |
 | `clap.mp3` | 👏 Clap | People clapping | [Clapping.mp3](https://freesound.org/people/Camo1018/sounds/425663/) by Camo1018 on Freesound | CC0 1.0 |
 | `gasp.mp3` | 😱 Gasp | A crowd gasping | [Crowd gasp.wav](https://freesound.org/people/RadioCounseling/sounds/635110/) by RadioCounseling on Freesound. Fourteen recorded gasps, layered by the author | CC0 1.0 |
 
-Edits made for the game: cut to the length of a reaction (2 seconds or less; the whoop, boo, and cheer up to about 2.5 seconds; the peach fart about 2.8 seconds), a short fade, and loudness matching to about −16 LUFS. The peach clip is two CC0 recordings joined with a short crossfade. The 🦖 roar is unchanged.
+Edits made for the game: cut to the length of a reaction (2 seconds or less; the whoop, boo, and cheer up to about 2.5 seconds; the peach fart about 2.8 seconds; the bone rattle about 1.4 seconds), a short fade, and loudness matching to about −16 LUFS. The peach clip is two CC0 recordings joined with a short crossfade. The 🦖 roar is unchanged.
+
+The roar button’s picture is the Twemoji T-rex (`public/twemoji-1f996.svg`), copyright Twitter, Inc and other contributors, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source: https://github.com/twitter/twemoji
