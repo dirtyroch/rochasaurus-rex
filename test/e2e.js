@@ -3,7 +3,8 @@ process.env.TIME_SCALE = process.env.TIME_SCALE || '0.03';
 process.env.GRACE_MS = '250'; process.env.OFFLINE_WAIT_MS = '400';
 const assert = require('assert');
 const { io } = require('socket.io-client');
-const { server, rooms, makePairs, familyFilter } = require('../server');
+const { server, rooms, makePairs, assignPrompts, familyFilter, REACT_COOLDOWN_MS } = require('../server');
+const REACTIONS = require('../public/reactions');
 const P = require('../prompts');
 
 const PORT = 4797; const URL = `http://localhost:${PORT}`;
@@ -91,6 +92,22 @@ const close = (cs) => cs.forEach(c => c.s.close());
   ok(P.FAMILY.length >= 200 && new Set(all).size === all.length, `prompt library: ${P.FAMILY.length} family + ${P.SPICY.length} spicy + ${P.FINALS.length} finals, no duplicates`);
   ok(!/jackbox|quiplash|quiplash/i.test(require('fs').readFileSync(require.resolve('../prompts')) + require('fs').readFileSync(require.resolve('../server'))), 'no third-party game names in prompts/server');
   ok(familyFilter('what the hell, damn it') !== 'what the hell, damn it' && familyFilter('hello shell') === 'hello shell', 'family filter masks bad words but not innocent ones');
+  const need = ['💩', '🍑', '🗣️', '👎', '👍'];
+  ok(need.every(e => REACTIONS.some(r => r.emoji === e && typeof r.play === 'function')) && new Set(REACTIONS.map(r => r.id)).size === REACTIONS.length, 'soundboard config has plop, squeak, hype, boo, and cheer');
+  ok(REACT_COOLDOWN_MS >= 1000, 'reaction cooldown is about a second');
+  {
+    const pairs = [['a', 'b'], ['b', 'c'], ['c', 'a']];
+    const own = assignPrompts(pairs, [{ text: 'A', by: 'a' }, { text: 'B', by: 'b' }, { text: 'L', by: null }]);
+    ok(own.every((d, i) => !d.by || !pairs[i].includes(d.by)), 'a player is not dealt their own prompt when another seat is free');
+    const crowded = assignPrompts(pairs, [{ text: '1', by: 'a' }, { text: '2', by: 'a' }, { text: '3', by: 'a' }]);
+    ok(crowded.filter((d, i) => !pairs[i].includes('a')).length === 1 && new Set(crowded.map(d => d.text)).size === 3, 'when only one seat is safe, that seat still gets the author\'s prompt and every prompt is dealt once');
+    const ids = Array.from({ length: 10 }, (_, i) => 'p' + i);
+    const bigPairs = ids.map((id, i) => [id, ids[(i + 1) % ids.length]]);
+    const bigDrawn = bigPairs.map((_, i) => ({ text: 't' + i, by: i < 5 ? ids[i] : null }));
+    const t0 = Date.now();
+    const big = assignPrompts(bigPairs, bigDrawn);
+    ok(Date.now() - t0 < 200 && big.every((d, i) => !d.by || !bigPairs[i].includes(d.by)) && new Set(big.map(d => d.text)).size === 10, 'assignment stays fast and fair for 10 players');
+  }
 
   // --- full 3-player game: sweeps + scoring ---
   {
@@ -196,7 +213,99 @@ const close = (cs) => cs.forEach(c => c.s.close());
     await waitFor(() => host.st.phase === 'vote', 20000);
     const shown = host.results.length ? host.results[0] : host.st.match;
     const txt = shown.answers.map(a => a.text).join('|');
-    ok(!/hell/.test(txt) && /#@\$%/.test(txt), 'family filter masks answers by default: ' + txt);
+    ok(/hell/.test(txt) && !/#@\$%/.test(txt), 'answers are not censored by default: ' + txt);
+    close(cs);
+  }
+  {
+    const { host, all: cs } = await makeRoom(3, { each: () => ({ mode: 'silent' }), host: { mode: 'silent' } });
+    await emitAck(host, 'start');
+    await waitFor(() => host.st.phase === 'answer');
+    const raw = '<script>hell</script> ' + 'Q'.repeat(100);
+    const res = await emitAck(host, 'answer', { promptId: host.st.answer.mine[0].id, text: raw, phaseId: host.st.game.phaseId });
+    ok(res.ok && res.text.length === 80 && !/[<>]/.test(res.text) && /hell/.test(res.text), 'answers keep the words, strip HTML, and stay length-limited: ' + res.text);
+    close(cs);
+  }
+  {
+    const { host, all: cs } = await makeRoom(3, { each: () => ({ answerText: 'what the hell' }) });
+    host.s.emit('settings', { filter: true });
+    await waitFor(() => host.st.settings.filter === true);
+    await emitAck(host, 'start');
+    await waitFor(() => host.st.phase === 'vote' || host.results.length, 20000);
+    const shown = host.results.length ? host.results[0] : host.st.match;
+    const txt = shown.answers.map(a => a.text).join('|');
+    ok(!/hell/.test(txt) && /#@\$%/.test(txt), 'family filter masks answers when the host turns it on: ' + txt);
+    close(cs);
+  }
+  {
+    const { host, all: cs } = await makeRoom(3);
+    ok(host.st.settings.filter === false, 'family filter defaults to off');
+    const named = await connect(client('Potty'));
+    await emitAck(named, 'join', { code: host.st.code, name: 'damn', playerId: named.pid });
+    await waitFor(() => named.st && named.st.players.some(p => p.name === 'damn'), 3000, 'uncensored nickname');
+    ok(true, 'nicknames are not censored by default');
+    host.s.emit('settings', { filter: true });
+    await waitFor(() => host.st.settings.filter === true);
+    const named2 = await connect(client('Potty2'));
+    await emitAck(named2, 'join', { code: host.st.code, name: 'hell', playerId: named2.pid });
+    await waitFor(() => named2.st && named2.st.players.some(p => p.name !== 'hell' && /#@\$%/.test(p.name)), 3000, 'filtered nickname');
+    ok(true, 'family filter censors new nicknames when it is on');
+    const cr = await emitAck(host, 'custom', 'what the hell');
+    await waitFor(() => (host.st.myCustom || []).some(t => !/hell/.test(t) && /#@\$%/.test(t)), 2000, 'filtered prompt');
+    ok(cr.ok, 'family filter censors new prompts when it is on');
+    close([...cs, named, named2]);
+  }
+  {
+    const { host, all: cs } = await makeRoom(3);
+    const markup = await emitAck(host, 'custom', '<' + 'h'.repeat(150) + '>');
+    await waitFor(() => (host.st.myCustom || []).some(t => t.length === 100 && !/[<>]/.test(t)), 2000, 'trimmed prompt');
+    ok(markup.ok, 'custom prompts keep the length limit and strip HTML');
+    const swear = await emitAck(cs[1], 'custom', 'what the hell is a snack');
+    await waitFor(() => (cs[1].st.myCustom || []).some(t => /hell is a snack/.test(t)), 2000, 'raw prompt');
+    ok(swear.ok, 'custom prompts are not censored by default');
+    await emitAck(host, 'start');
+    await waitFor(() => host.st.phase === 'answer' && host.st.game.round === 1, 8000, 'round 1 answer');
+    const later = await emitAck(cs[1], 'custom', 'what the hell is for dinner tonight');
+    ok(later.ok, 'a player can save a prompt while a round is in progress');
+    let credited = null;
+    const watch = setInterval(() => {
+      for (const c of cs) {
+        const m = (c.st?.answer?.mine || []).find(x => /dinner tonight/.test(x.text || ''));
+        if (m) credited = { id: c.st.you, by: m.by };
+      }
+    }, 15);
+    await waitFor(() => host.results.filter(x => x.round === 1).length === 3, 20000, 'round 1 results');
+    const hostPrompts = host.results.filter(x => x.round === 1 && x.by === 'P1');
+    ok(hostPrompts.length === 1 && /hell is a snack/.test(hostPrompts[0].prompt), 'a lobby prompt is dealt and credited: prompt by P1');
+    ok(hostPrompts[0].answers.every(a => a.authorId !== cs[1].st.you), 'the author is not dealt their own lobby prompt');
+    ok(host.results.some(x => x.round === 1 && /^h{100}$/.test(x.prompt)), 'the length-limited prompt is what players see');
+    await waitFor(() => host.results.filter(x => x.round === 2).length === 3, 25000, 'round 2 results');
+    clearInterval(watch);
+    const hit = host.results.find(x => x.round === 2 && /dinner tonight/.test(x.prompt));
+    ok(hit && hit.by === 'P1', 'a prompt written mid-game is dealt in a later round and credited');
+    ok(hit.answers.every(a => a.authorId !== cs[1].st.you), 'the author does not answer the prompt they wrote while waiting');
+    ok(credited && credited.by === 'P1' && credited.id !== cs[1].st.you, 'the answer screen says prompt by the author');
+    close(cs);
+  }
+  {
+    const { host, all: cs } = await makeRoom(3);
+    const got = [];
+    cs[1].s.on('react', (p) => got.push(p));
+    host.s.emit('react', 'nope');
+    host.s.emit('react', 'plop');
+    cs[2].s.emit('react', 'yay');
+    await waitFor(() => got.some(p => p.id === 'plop') && got.some(p => p.id === 'yay'), 2000, 'reactions');
+    ok(got.some(p => p.id === 'plop' && p.emoji === '💩' && p.from === host.st.you), 'a reaction is broadcast to the room with its emoji');
+    ok(got.some(p => p.id === 'yay' && p.emoji === '👍' && p.from === cs[2].st.you), 'two players can react at the same time');
+    ok(got.every(p => p.id !== 'nope'), 'unknown reaction ids are ignored');
+    const t0 = Date.now();
+    host.s.emit('react', 'toot');
+    await sleep(200);
+    ok(!got.some(p => p.id === 'toot'), 'a second reaction inside the cooldown is dropped');
+    const left = REACT_COOLDOWN_MS + 150 - (Date.now() - t0);
+    if (left > 0) await sleep(left);
+    host.s.emit('react', 'hoo');
+    await waitFor(() => got.some(p => p.id === 'hoo' && p.emoji === '🗣️'), 2000, 'reaction after cooldown');
+    ok(true, 'a reaction is allowed again after about a second');
     close(cs);
   }
 
@@ -235,9 +344,9 @@ const close = (cs) => cs.forEach(c => c.s.close());
     ok(r.error, 'cannot start with 2 players: ' + r.error);
     cs[1].s.emit('settings', { pack: 'spicy' });
     await sleep(100);
-    ok(host.st.settings.pack === 'family', 'only the host can change settings');
-    host.s.emit('settings', { pack: 'spicy', pace: 'hasty', filter: false });
-    await waitFor(() => cs[1].st.settings.pack === 'spicy' && cs[1].st.settings.pace === 'hasty' && cs[1].st.settings.filter === false, 2000);
+    ok(host.st.settings.pack === 'family' && host.st.settings.filter === false, 'only the host can change settings, and the filter starts off');
+    host.s.emit('settings', { pack: 'spicy', pace: 'hasty', filter: true });
+    await waitFor(() => cs[1].st.settings.pack === 'spicy' && cs[1].st.settings.pace === 'hasty' && cs[1].st.settings.filter === true, 2000);
     ok(true, 'host settings sync to everyone');
     const tv = await connect(client('TV'));
     const w = await emitAck(tv, 'watch', { code: host.st.code });
